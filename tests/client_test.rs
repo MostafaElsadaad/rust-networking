@@ -27,6 +27,7 @@ fn setup_server_thread(server: Arc<Server>) -> JoinHandle<()> {
     })
 }
 
+
 #[test]
 fn test_client_connection() {
     // Run the async code with a custom runtime
@@ -45,108 +46,108 @@ fn test_client_connection() {
             client.disconnect().is_ok(),
             "Failed to disconnect from the server"
         );
-
-        // You might need to implement a stop mechanism for the server in this case,
-        // for example by setting a flag or using some cleanup method.
-
-        // Wait for the server thread to finish
         handle;
     });
 }
 
-// #[test]
-// fn test_client_echo_message() {
-//     // Set up the server in a separate thread
-//     let server = create_server();
-//     let handle = setup_server_thread(server.clone());
+#[test]
+fn test_client_echo_message_async() {
+    // Run the async code with a custom runtime
+    let runtime = Runtime::new().expect("Failed to create runtime");
+    runtime.block_on(async {
+        // Set up the server asynchronously
+        let server = create_server().await;
+        let handle = setup_server_thread(server.clone());
 
-//     // Create and connect the client
-//     let mut client = client::Client::new("localhost", 8080, 1000);
-//     assert!(client.connect().is_ok(), "Failed to connect to the server");
+        // Create and connect the client asynchronously
+        let mut client = client::Client::new("localhost", 8080, 1000);
+        assert!(client.connect().is_ok(), "Failed to connect to the server");
 
-//     // Prepare the message
-//     let mut echo_message = EchoMessage::default();
-//     echo_message.content = "Hello, World!".to_string();
-//     let message = client_message::Message::EchoMessage(echo_message.clone());
+        // Prepare the message
+        let mut echo_message = EchoMessage::default();
+        echo_message.content = "Hello, World!".to_string();
+        let message = client_message::Message::EchoMessage(echo_message.clone());
 
-//     // Send the message to the server
-//     assert!(client.send(message).is_ok(), "Failed to send message");
+        // Send the message to the server asynchronously
+        assert!(client.send(message).is_ok(), "Failed to send message");
 
-//     // Receive the echoed message
-//     let response = client.receive();
-//     assert!(
-//         response.is_ok(),
-//         "Failed to receive response for EchoMessage"
-//     );
+        // Receive the echoed message asynchronously
+        let response = client.receive();
+        assert!(
+            response.is_ok(),
+            "Failed to receive response for EchoMessage"
+        );
 
-//     match response.unwrap().message {
-//         Some(server_message::Message::EchoMessage(echo)) => {
-//             assert_eq!(
-//                 echo.content, echo_message.content,
-//                 "Echoed message content does not match"
-//             );
-//         }
-//         _ => panic!("Expected EchoMessage, but received a different message"),
-//     }
+        match response.unwrap().message {
+            Some(server_message::Message::EchoMessage(echo)) => {
+                assert_eq!(
+                    echo.content, echo_message.content,
+                    "Echoed message content does not match"
+                );
+            }
+            _ => panic!("Expected EchoMessage, but received a different message"),
+        }
 
-//     // Disconnect the client
-//     assert!(
-//         client.disconnect().is_ok(),
-//         "Failed to disconnect from the server"
-//     );
+        // Disconnect the client asynchronously
+        assert!(
+            client.disconnect().is_ok(),
+            "Failed to disconnect from the server"
+        );
 
-//     // Stop the server and wait for thread to finish
-//     server.stop();
-//     assert!(
-//         handle.join().is_ok(),
-//         "Server thread panicked or failed to join"
-//     );
-// }
+        // Stop the server and wait for the server thread to finish
+        server.stop();
+        assert!(
+            handle.await.is_ok(),
+            "Server task failed or panicked"
+        );
+    });
+}
 
-// #[test]
-// #[ignore = "please remove ignore and fix this test"]
-// fn test_multiple_echo_messages() {
-//     // Set up the server in a separate thread
-//     let server = create_server();
-//     let handle = setup_server_thread(server.clone());
+#[test]
+//#[ignore = "please remove ignore and fix this test"]
+fn test_multiple_echo_messages() {
+    // Set up the server in a separate thread
+    //let server = create_server();
+    //let handle = setup_server_thread(server.clone());
 
-//     // Create and connect the client
-//     let mut client = client::Client::new("localhost", 8080, 1000);
-//     assert!(client.connect().is_ok(), "Failed to connect to the server");
+    // Create and connect the client:
+    let mut client = client::Client::new("127.0.0.1", 5000, 1000);
+    assert!(client.connect().is_ok(), "Failed to connect to the server");
 
-//     // Prepare multiple messages
-//     let messages = vec![
-//         "Hello, World!".to_string(),
-//         "How are you?".to_string(),
-//         "Goodbye!".to_string(),
-//     ];
+    // Prepare multiple messages
+    let messages = vec![
+        "Hello, World!".to_string(),
+        "How are you?".to_string(),
+        "Goodbye!".to_string(),
+    ];
 
-//     // Send and receive multiple messages
-//     for message_content in messages {
-//         let mut echo_message = EchoMessage::default();
-//         echo_message.content = message_content.clone();
-//         let message = client_message::Message::EchoMessage(echo_message);
+    // Send and receive multiple messages
+    for message_content in messages {
+        let mut echo_message = EchoMessage::default();
+        echo_message.content = message_content.clone();
+        let message = client_message::Message::EchoMessage(echo_message);
 
-//         // Send the message to the server
-//         assert!(client.send(message).is_ok(), "Failed to send message");
+        // Send the message to the server
+        assert!(client.send(message).is_ok(), "Failed to send message");
 
-//         // Receive the echoed message
-//         let response = client.receive();
-//         assert!(
-//             response.is_ok(),
-//             "Failed to receive response for EchoMessage"
-//         );
+        // Receive the echoed message
+        let response = client.receive();
+        assert!(
+            response.is_ok(),
+            "Failed to receive response for EchoMessage"
+        );
 
-//         match response.unwrap().message {
-//             Some(server_message::Message::EchoMessage(echo)) => {
-//                 assert_eq!(
-//                     echo.content, message_content,
-//                     "Echoed message content does not match"
-//                 );
-//             }
-//             _ => panic!("Expected EchoMessage, but received a different message"),
-//         }
-//     }
+        match response.unwrap().message {
+            Some(server_message::Message::EchoMessage(echo)) => {
+                assert_eq!(
+                    echo.content, message_content,
+                    "Echoed message content does not match"
+                );
+            }
+            _ => panic!("Expected EchoMessage, but received a different message"),
+        }
+    }
+}
 
 //     // Disconnect the client
 //     assert!(
