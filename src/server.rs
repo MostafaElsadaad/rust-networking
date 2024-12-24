@@ -92,9 +92,6 @@ impl Client {
             else {
                 error!("Failed to decode message");
             }
-    
-            // Optionally, you can add a small delay between messages to reduce CPU usage
-            // tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 }
