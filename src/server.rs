@@ -3,7 +3,7 @@ use prost::Message;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io;
-use crate::message::EchoMessage;
+use crate::message::{EchoMessage,AddRequest,AddResponse};
 use tokio::time;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -23,27 +23,79 @@ impl Client {
     // Asynchronous method to handle the client's communication.
     pub async fn handle(&mut self) -> io::Result<()> {
         let mut buffer = [0; 512];
-
-        // Read data from the client asynchronously.
-        let bytes_read = self.stream.read(&mut buffer).await?;
-        if bytes_read == 0 {
-            info!("Client disconnected.");
-            return Ok(());
+    
+        loop {
+            // Read data from the stream asynchronously
+            let bytes_read = match self.stream.read(&mut buffer).await {
+                Ok(n) if n > 0 => n, // Successfully read data
+                Ok(_) => {
+                    // No data was read (client closed connection)
+                    info!("Client disconnected.");
+                    return Ok(()); // Exit the loop and return
+                }
+                Err(e) => {
+                    // Error occurred while reading
+                    error!("Failed to read from client: {}", e);
+                    return Err(e); // Return error
+                }
+            };
+    
+            // Try to decode AddRequest message
+            if let Ok(add_request) = AddRequest::decode(&buffer[..bytes_read]) {
+                // Perform the addition
+                let sum = add_request.a + add_request.b;
+    
+                // Log the result
+                info!("Adding {} + {} = {}", add_request.a, add_request.b, sum);
+    
+                // Create an AddResponse with the result
+                let add_response = AddResponse {
+                    result: sum,
+                };
+    
+                // Encode the AddResponse message to a buffer
+                let mut buffer = Vec::new();
+                add_response.encode(&mut buffer);
+    
+                // Send the response asynchronously
+                if let Err(e) = self.stream.write_all(&buffer).await {
+                    error!("Failed to send response: {}", e);
+                    return Err(e); // Return error if write fails
+                }
+    
+                // Make sure all data is sent
+                if let Err(e) = self.stream.flush().await {
+                    error!("Failed to flush stream: {}", e);
+                    return Err(e); // Return error if flush fails
+                }
+            }
+            // Try to decode EchoMessage
+            else if let Ok(echo_message) = EchoMessage::decode(&buffer[..bytes_read]) {
+                // Process EchoMessage
+                info!("Received EchoMessage: {}", echo_message.content);
+                println!("Received EchoMessage: {}", echo_message.content);
+    
+                // Echo back the message asynchronously
+                let payload = echo_message.encode_to_vec();
+                if let Err(e) = self.stream.write_all(&payload).await {
+                    error!("Failed to send response: {}", e);
+                    return Err(e); // Return error if write fails
+                }
+    
+                // Make sure all data is sent
+                if let Err(e) = self.stream.flush().await {
+                    error!("Failed to flush stream: {}", e);
+                    return Err(e); // Return error if flush fails
+                }
+            }
+            // Handle unexpected message types
+            else {
+                error!("Failed to decode message");
+            }
+    
+            // Optionally, you can add a small delay between messages to reduce CPU usage
+            // tokio::time::sleep(Duration::from_millis(100)).await;
         }
-
-        if let Ok(message) = EchoMessage::decode(&buffer[..bytes_read]) {
-            info!("Received: {}", message.content);
-            println!("Received: {}", message.content);
-
-            // Echo back the message asynchronously.
-            let payload = message.encode_to_vec();
-            self.stream.write_all(&payload).await?;
-            self.stream.flush().await?;
-        } else {
-            error!("Failed to decode message");
-        }
-
-        Ok(())
     }
 }
 
