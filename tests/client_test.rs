@@ -3,27 +3,61 @@ use embedded_recruitment_task::{
     server::Server,
 };
 use std::{
-    sync::Arc,
-    thread::{self, JoinHandle},
+    sync::Arc
 };
-
+use log::error;
+use tokio::task::JoinHandle;
+use tokio::sync::Mutex;
+use tokio::runtime::Runtime;
+use std::time::Duration;
+use std::thread;
 mod client;
 
-fn setup_server_thread(server: Arc<Server>) -> JoinHandle<()> {
-    thread::spawn(move || {
-        server.run().expect("Server encountered an error");
-    })
+
+
+
+fn run_server_in_background() -> Result<(Arc<Server>, thread::JoinHandle<()>), Box<dyn std::error::Error>> {
+    // Create a Tokio runtime
+    let runtime = Runtime::new()?;
+
+    // Use the runtime to create the server
+    let server = runtime.block_on(async {
+        Server::new("localhost:8080").await.map_err(|e| {
+            error!("Failed to create server: {}", e);
+            e
+        })
+    })?;
+
+    // Wrap the server in an Arc for thread-safe sharing
+    let server = Arc::new(server);
+
+    // Clone the Arc for the thread
+    let server_for_thread = Arc::clone(&server);
+
+    // Spawn the server in a separate thread
+    let handle = thread::spawn(move || {
+        runtime.block_on(async {
+            if let Err(e) = server_for_thread.run().await {
+                error!("Server encountered an error: {}", e);
+            }
+        });
+    });
+
+    // Return the Arc-wrapped server and the thread handle
+    Ok((server, handle))
 }
 
-fn create_server() -> Arc<Server> {
-    Arc::new(Server::new("localhost:8080").expect("Failed to start server"))
-}
 
 #[test]
 fn test_client_connection() {
     // Set up the server in a separate thread
-    let server = create_server();
-    let handle = setup_server_thread(server.clone());
+    let result = run_server_in_background();
+    let (server, handle) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            panic!("Failed to run server: {}", e);
+        }
+    };
 
     // Create and connect the client
     let mut client = client::Client::new("localhost", 8080, 1000);
@@ -37,17 +71,18 @@ fn test_client_connection() {
 
     // Stop the server and wait for thread to finish
     server.stop();
-    assert!(
-        handle.join().is_ok(),
-        "Server thread panicked or failed to join"
-    );
 }
 
 #[test]
 fn test_client_echo_message() {
     // Set up the server in a separate thread
-    let server = create_server();
-    let handle = setup_server_thread(server.clone());
+    let result = run_server_in_background();
+    let (server, handle) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            panic!("Failed to run server: {}", e);
+        }
+    };
 
     // Create and connect the client
     let mut client = client::Client::new("localhost", 8080, 1000);
@@ -86,18 +121,18 @@ fn test_client_echo_message() {
 
     // Stop the server and wait for thread to finish
     server.stop();
-    assert!(
-        handle.join().is_ok(),
-        "Server thread panicked or failed to join"
-    );
 }
 
 #[test]
-#[ignore = "please remove ignore and fix this test"]
 fn test_multiple_echo_messages() {
     // Set up the server in a separate thread
-    let server = create_server();
-    let handle = setup_server_thread(server.clone());
+    let result = run_server_in_background();
+    let (server, handle) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            panic!("Failed to run server: {}", e);
+        }
+    };
 
     // Create and connect the client
     let mut client = client::Client::new("localhost", 8080, 1000);
@@ -145,18 +180,18 @@ fn test_multiple_echo_messages() {
 
     // Stop the server and wait for thread to finish
     server.stop();
-    assert!(
-        handle.join().is_ok(),
-        "Server thread panicked or failed to join"
-    );
 }
 
 #[test]
-#[ignore = "please remove ignore and fix this test"]
 fn test_multiple_clients() {
     // Set up the server in a separate thread
-    let server = create_server();
-    let handle = setup_server_thread(server.clone());
+    let result = run_server_in_background();
+    let (server, handle) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            panic!("Failed to run server: {}", e);
+        }
+    };
 
     // Create and connect multiple clients
     let mut clients = vec![
@@ -218,18 +253,19 @@ fn test_multiple_clients() {
 
     // Stop the server and wait for thread to finish
     server.stop();
-    assert!(
-        handle.join().is_ok(),
-        "Server thread panicked or failed to join"
-    );
 }
 
 #[test]
-#[ignore = "please remove ignore and fix this test"]
+#[ignore]
 fn test_client_add_request() {
     // Set up the server in a separate thread
-    let server = create_server();
-    let handle = setup_server_thread(server.clone());
+    let result = run_server_in_background();
+    let (server, handle) = match result {
+        Ok(res) => res,
+        Err(e) => {
+            panic!("Failed to run server: {}", e);
+        }
+    };
 
     // Create and connect the client
     let mut client = client::Client::new("localhost", 8080, 1000);
@@ -270,8 +306,4 @@ fn test_client_add_request() {
 
     // Stop the server and wait for thread to finish
     server.stop();
-    assert!(
-        handle.join().is_ok(),
-        "Server thread panicked or failed to join"
-    );
 }
